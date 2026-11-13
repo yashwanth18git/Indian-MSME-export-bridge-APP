@@ -17,6 +17,7 @@ import { NewOrderModal } from './components/NewOrderModal';
 import { ShipmentsAndLogistics } from './components/ShipmentsAndLogistics';
 import { WhatsAppShareSheet } from './components/WhatsAppShareSheet';
 import {
+  INITIAL_BATCH_TRACES,
   INITIAL_CATALOG,
   INITIAL_ENTITIES,
   INITIAL_FREIGHT_QUOTES,
@@ -27,6 +28,7 @@ import {
 } from './data/seedData';
 import type {
   CurrencyCode,
+  CustodyStageKey,
   ExportEntity,
   ExportOrder,
   FreightQuote,
@@ -34,6 +36,7 @@ import type {
   IcegateStatus,
   NavTab,
   PermissionKey,
+  ProductBatchTrace,
   ShipmentStage,
   TeamMemberAccess,
   UserRoleKey,
@@ -91,13 +94,32 @@ export default function App() {
     return INITIAL_TEAM_ACCESS;
   });
 
+  const [batchTraces, setBatchTraces] = useState<ProductBatchTrace[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.batchTraces) && parsed.batchTraces.length > 0) {
+          return parsed.batchTraces;
+        }
+      }
+    } catch {
+      // Fallback to seed
+    }
+    return INITIAL_BATCH_TRACES;
+  });
+
   const [fxRates, setFxRates] =
     useState<Record<CurrencyCode, FxRateInfo>>(INITIAL_FX_RATES);
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
+  const [shipmentsSubView, setShipmentsSubView] = useState<'freight' | 'custody'>('freight');
   const [activeEntityId, setActiveEntityId] = useState<string>('all');
   const [activeRole, setActiveRole] = useState<UserRoleKey>('owner');
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
     INITIAL_ORDERS[0].id
+  );
+  const [selectedTraceId, setSelectedTraceId] = useState<string>(
+    INITIAL_BATCH_TRACES[0].id
   );
 
   const [newOrderOpen, setNewOrderOpen] = useState(false);
@@ -113,12 +135,12 @@ export default function App() {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ entities, orders, teamMatrix })
+        JSON.stringify({ entities, orders, teamMatrix, batchTraces })
       );
     } catch {
       // Ignore storage quota errors
     }
-  }, [entities, orders, teamMatrix]);
+  }, [entities, orders, teamMatrix, batchTraces]);
 
   const accessibleEntityIds = useMemo(
     () =>
@@ -243,6 +265,74 @@ export default function App() {
     );
   };
 
+  const handleLogBatchIntake = (trace: ProductBatchTrace) => {
+    setBatchTraces((prev) => [trace, ...prev]);
+    setSelectedTraceId(trace.id);
+  };
+
+  const handleRecordHandoff = (
+    traceId: string,
+    stage: CustodyStageKey,
+    payload: {
+      custodianName: string;
+      location: string;
+      verifiedWeightKg: number;
+      verifiedQty: number;
+      notes: string;
+    }
+  ) => {
+    const nowLabel = `${new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })} · ${new Date().toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
+
+    let linkedOrderId: string | undefined;
+
+    setBatchTraces((prev) =>
+      prev.map((trace) => {
+        if (trace.id !== traceId) return trace;
+        linkedOrderId = trace.orderId;
+        const updatedCheckpoints = trace.checkpoints.map((cp) =>
+          cp.stage === stage
+            ? {
+                ...cp,
+                completed: true,
+                timestamp: nowLabel,
+                custodianName: payload.custodianName,
+                location: payload.location,
+                verifiedWeightKg: payload.verifiedWeightKg,
+                verifiedQty: payload.verifiedQty,
+                notes: payload.notes,
+              }
+            : cp
+        );
+        const nextQcStatus =
+          stage === 'qc_inspection' ? 'Passed' : trace.qcStatus;
+        return {
+          ...trace,
+          qcStatus: nextQcStatus,
+          receivedWeightKg: payload.verifiedWeightKg,
+          receivedQty: payload.verifiedQty,
+          checkpoints: updatedCheckpoints,
+        };
+      })
+    );
+
+    if (stage === 'buyer_delivery' && linkedOrderId) {
+      setOrders((prev) =>
+        prev.map((ord) =>
+          ord.id === linkedOrderId
+            ? { ...ord, shipmentStage: 'Destination Arrival' }
+            : ord
+        )
+      );
+    }
+  };
+
   const handleAddEntity = (newEntity: ExportEntity) => {
     setEntities((prev) => [...prev, newEntity]);
     setTeamMatrix((prev) =>
@@ -333,8 +423,8 @@ export default function App() {
     },
     {
       id: 'shipments',
-      label: 'Shipments & Freight',
-      mobileLabel: 'Ship',
+      label: 'Shipments & Traceability',
+      mobileLabel: 'Track',
       icon: Ship,
     },
     {
@@ -546,6 +636,12 @@ export default function App() {
                 setSelectedOrderId(orderId);
                 setActiveTab('documents');
               }}
+              onTraceOrderBatch={(orderId) => {
+                const match = batchTraces.find((t) => t.orderId === orderId);
+                if (match) setSelectedTraceId(match.id);
+                setShipmentsSubView('custody');
+                setActiveTab('shipments');
+              }}
               onShareWhatsApp={(title, message, phone) =>
                 setShareModal({ open: true, title, message, phone })
               }
@@ -589,10 +685,19 @@ export default function App() {
               activeEntityId={activeEntityId}
               orders={visibleOrders}
               freightQuotes={freightQuotes}
+              batchTraces={batchTraces.filter((t) =>
+                accessibleEntityIds.includes(t.entityId)
+              )}
+              selectedTraceId={selectedTraceId}
+              onSelectTrace={setSelectedTraceId}
+              subView={shipmentsSubView}
+              onChangeSubView={setShipmentsSubView}
               activeRole={activeRole}
               teamMatrix={teamMatrix}
               onAdvanceShipment={handleAdvanceShipment}
               onSelectFreightQuote={handleSelectFreightQuote}
+              onLogBatchIntake={handleLogBatchIntake}
+              onRecordHandoff={handleRecordHandoff}
               onShareWhatsApp={(title, message, phone) =>
                 setShareModal({ open: true, title, message, phone })
               }

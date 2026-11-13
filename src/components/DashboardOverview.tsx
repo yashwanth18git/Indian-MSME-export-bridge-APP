@@ -34,6 +34,7 @@ interface DashboardOverviewProps {
   onNavigate: (tab: NavTab) => void;
   onOpenNewOrder: () => void;
   onSelectOrderForDocs: (orderId: string) => void;
+  onTraceOrderBatch: (orderId: string) => void;
   onShareWhatsApp: (title: string, message: string, phone?: string) => void;
   onRefreshFx: () => void;
 }
@@ -50,6 +51,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onNavigate,
   onOpenNewOrder,
   onSelectOrderForDocs,
+  onTraceOrderBatch,
   onShareWhatsApp,
   onRefreshFx,
 }) => {
@@ -645,13 +647,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       </p>
                     </td>
                     <td className="py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => onSelectOrderForDocs(order.id)}
-                        className="min-h-[38px] px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-[#0F3D5E] hover:bg-[#0F3D5E]/5 transition-colors whitespace-nowrap"
-                      >
-                        Open Docs
-                      </button>
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onTraceOrderBatch(order.id)}
+                          className="min-h-[38px] px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                        >
+                          Trace Batch
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onSelectOrderForDocs(order.id)}
+                          className="min-h-[38px] px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-[#0F3D5E] hover:bg-[#0F3D5E]/5 transition-colors whitespace-nowrap"
+                        >
+                          Open Docs
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

@@ -8,24 +8,44 @@ import {
   Truck,
 } from 'lucide-react';
 import type {
+  CustodyStageKey,
   ExportEntity,
   ExportOrder,
   FreightQuote,
+  ProductBatchTrace,
   ShipmentStage,
   TeamMemberAccess,
   UserRoleKey,
 } from '../types/export';
 import { hasEntityPermission } from '../utils/formatters';
+import { ProducerToBuyerTracker } from './ProducerToBuyerTracker';
 
 interface ShipmentsAndLogisticsProps {
   entities: ExportEntity[];
   activeEntityId: string;
   orders: ExportOrder[];
   freightQuotes: FreightQuote[];
+  batchTraces: ProductBatchTrace[];
+  selectedTraceId: string;
+  onSelectTrace: (traceId: string) => void;
+  subView: 'freight' | 'custody';
+  onChangeSubView: (view: 'freight' | 'custody') => void;
   activeRole: UserRoleKey;
   teamMatrix: TeamMemberAccess[];
   onAdvanceShipment: (orderId: string, nextStage: ShipmentStage) => void;
   onSelectFreightQuote: (quoteId: string) => void;
+  onLogBatchIntake: (trace: ProductBatchTrace) => void;
+  onRecordHandoff: (
+    traceId: string,
+    stage: CustodyStageKey,
+    payload: {
+      custodianName: string;
+      location: string;
+      verifiedWeightKg: number;
+      verifiedQty: number;
+      notes: string;
+    }
+  ) => void;
   onShareWhatsApp: (title: string, message: string, phone?: string) => void;
 }
 
@@ -41,10 +61,17 @@ export const ShipmentsAndLogistics: React.FC<ShipmentsAndLogisticsProps> = ({
   activeEntityId,
   orders,
   freightQuotes,
+  batchTraces,
+  selectedTraceId,
+  onSelectTrace,
+  subView,
+  onChangeSubView,
   activeRole,
   teamMatrix,
   onAdvanceShipment,
   onSelectFreightQuote,
+  onLogBatchIntake,
+  onRecordHandoff,
   onShareWhatsApp,
 }) => {
   const [modeFilter, setModeFilter] = useState<string>('All');
@@ -82,24 +109,71 @@ export const ShipmentsAndLogistics: React.FC<ShipmentsAndLogisticsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Container & Live Shipment Milestone Tracker */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-200">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">
-              Live Container & Shipment Milestones
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Track cargo from factory gate-out through Indian port customs to destination arrival
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-600">
-            <Container className="w-4 h-4 text-[#0F3D5E]" />
-            <span>{scopedOrders.length} Active Shipments</span>
-          </div>
+      {/* Top Segmented Switcher: Container & Freight vs Producer-to-Buyer Custody */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3 sm:px-5 sm:py-3.5 no-print">
+        <p className="text-xs font-medium text-slate-600">
+          Switch between port-to-port container tracking and full producer-to-buyer batch custody
+        </p>
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl shrink-0">
+          <button
+            type="button"
+            onClick={() => onChangeSubView('freight')}
+            className={`min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+              subView === 'freight'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Container & Freight
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeSubView('custody')}
+            className={`min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+              subView === 'custody'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Producer-to-Buyer Custody
+          </button>
         </div>
+      </div>
 
-        <div className="space-y-5">
+      {subView === 'custody' ? (
+        <ProducerToBuyerTracker
+          entities={entities}
+          activeEntityId={activeEntityId}
+          orders={orders}
+          batchTraces={batchTraces}
+          selectedTraceId={selectedTraceId}
+          onSelectTrace={onSelectTrace}
+          activeRole={activeRole}
+          teamMatrix={teamMatrix}
+          onLogBatchIntake={onLogBatchIntake}
+          onRecordHandoff={onRecordHandoff}
+          onShareWhatsApp={onShareWhatsApp}
+        />
+      ) : (
+        <>
+          {/* Container & Live Shipment Milestone Tracker */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-200">
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">
+                  Live Container & Shipment Milestones
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Track cargo from factory gate-out through Indian port customs to destination arrival
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                <Container className="w-4 h-4 text-[#0F3D5E]" />
+                <span>{scopedOrders.length} Active Shipments</span>
+              </div>
+            </div>
+
+            <div className="space-y-5">
           {scopedOrders.map((order) => {
             const ent = entities.find((e) => e.id === order.entityId);
             const currentIdx = STAGES.indexOf(order.shipmentStage);
@@ -299,6 +373,8 @@ export const ShipmentsAndLogistics: React.FC<ShipmentsAndLogisticsProps> = ({
           </table>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };

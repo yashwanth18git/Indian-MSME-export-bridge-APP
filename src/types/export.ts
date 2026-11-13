@@ -177,3 +177,43 @@ export interface FxRateInfo {
   interbankRate: number;
   dailyChangePct: number;
 }
+
+export type CustodyStageKey =
+  | 'producer_receipt'
+  | 'qc_inspection'
+  | 'warehouse_packing'
+  | 'port_customs'
+  | 'buyer_delivery';
+
+export interface CustodyCheckpoint {
+  stage: CustodyStageKey;
+  label: string;
+  completed: boolean;
+  timestamp?: string;
+  custodianName?: string;
+  location?: string;
+  verifiedWeightKg?: number;
+  verifiedQty?: number;
+  notes?: string;
+}
+
+export interface ProductBatchTrace {
+  id: string;
+  entityId: string;
+  orderId: string;
+  batchCode: string;
+  productName: string;
+  sku: string;
+  hsCode: string;
+  producerName: string;
+  producerLocation: string;
+  receivedDate: string;
+  expectedQty: number;
+  receivedQty: number;
+  unit: string;
+  expectedWeightKg: number;
+  receivedWeightKg: number;
+  qcStatus: 'Passed' | 'Minor Variance' | 'Pending QC';
+  checkpoints: CustodyCheckpoint[];
+}
+
