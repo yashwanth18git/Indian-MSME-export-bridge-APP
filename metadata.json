@@ -1,0 +1,6 @@
+{
+  "name": "NiryatSetu",
+  "description": "Take Indian Craft & Goods Global — Manage all your export entities, GST/LUT compliance, multi-currency billing, and global shipments from one pocket dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
